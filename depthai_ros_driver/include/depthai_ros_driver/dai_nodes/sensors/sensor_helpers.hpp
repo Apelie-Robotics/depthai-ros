@@ -9,6 +9,7 @@
 #include "depthai-shared/properties/VideoEncoderProperties.hpp"
 #include "depthai/pipeline/datatype/ADatatype.hpp"
 #include "image_transport/camera_publisher.hpp"
+#include "image_transport/publisher.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
 
 namespace dai {
@@ -47,8 +48,20 @@ extern std::vector<ImageSensor> availableSensors;
 void imgCB(const std::string& /*name*/,
            const std::shared_ptr<dai::ADatatype>& data,
            dai::ros::ImageConverter& converter,
+           image_transport::Publisher& pub);
+
+void imgCB(const std::string& /*name*/,
+           const std::shared_ptr<dai::ADatatype>& data,
+           dai::ros::ImageConverter& converter,
            image_transport::CameraPublisher& pub,
            std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager);
+
+void compressedImgCB(const std::string& /*name*/,
+                     const std::shared_ptr<dai::ADatatype>& data,
+                     dai::ros::ImageConverter& converter,
+                     image_transport::Publisher& pub,
+                     std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager,
+                     dai::RawImgFrame::Type dataType);
 
 void compressedImgCB(const std::string& /*name*/,
                      const std::shared_ptr<dai::ADatatype>& data,

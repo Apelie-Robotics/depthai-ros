@@ -5,6 +5,7 @@
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
 #include "depthai/pipeline/node/ColorCamera.hpp"
+#include "depthai/pipeline/node/EdgeDetector.hpp"
 #include "depthai/pipeline/node/VideoEncoder.hpp"
 #include "depthai/pipeline/node/XLinkIn.hpp"
 #include "depthai/pipeline/node/XLinkOut.hpp"
@@ -13,6 +14,7 @@
 #include "depthai_ros_driver/param_handlers/sensor_param_handler.hpp"
 #include "image_transport/camera_publisher.hpp"
 #include "image_transport/image_transport.hpp"
+#include "image_transport/publisher.hpp"
 #include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
@@ -29,17 +31,28 @@ RGB::RGB(const std::string& daiNodeName,
     colorCamNode = pipeline->create<dai::node::ColorCamera>();
     ph = std::make_unique<param_handlers::SensorParamHandler>(node, daiNodeName);
     ph->declareParams(colorCamNode, socket, sensor, publish);
+    if(ph->getParam<bool>("i_enable_edge_detection")) {
+        edgeDetectorNode = pipeline->create<dai::node::EdgeDetector>();
+        ph->declareParams(edgeDetectorNode);
+    }
     setXinXout(pipeline);
     RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
 }
 RGB::~RGB() = default;
 void RGB::setNames() {
     ispQName = getName() + "_isp";
+    edgesQName = getName() + "_edges";
     previewQName = getName() + "_preview";
     controlQName = getName() + "_control";
 }
 
 void RGB::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
+    if(ph->getParam<bool>("i_enable_edge_detection")) {
+        colorCamNode->video.link(edgeDetectorNode->inputImage);
+        edgeDetectorNode->setMaxOutputFrameSize(
+            colorCamNode->getVideoWidth() *
+            colorCamNode->getVideoHeight());
+    }
     if(ph->getParam<bool>("i_publish_topic")) {
         xoutColor = pipeline->create<dai::node::XLinkOut>();
         xoutColor->setStreamName(ispQName);
@@ -52,6 +65,17 @@ void RGB::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
                 colorCamNode->isp.link(xoutColor->input);
             else
                 colorCamNode->video.link(xoutColor->input);
+        }
+        if(ph->getParam<bool>("i_enable_edge_detection")) {
+            xoutEdges = pipeline->create<dai::node::XLinkOut>();
+            xoutEdges->setStreamName(edgesQName);
+            if(ph->getParam<bool>("i_low_bandwidth")) {
+                edgesVideoEnc = sensor_helpers::createEncoder(pipeline, ph->getParam<int>("i_low_bandwidth_quality"));
+                edgeDetectorNode->outputImage.link(edgesVideoEnc->input);
+                edgesVideoEnc->bitstream.link(xoutEdges->input);
+            } else {
+                edgeDetectorNode->outputImage.link(xoutEdges->input);
+            }
         }
     }
     if(ph->getParam<bool>("i_enable_preview")) {
@@ -85,16 +109,28 @@ void RGB::setupQueues(std::shared_ptr<dai::Device> device) {
         }
         rgbPub = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/image_raw");
         colorQ = device->getOutputQueue(ispQName, ph->getParam<int>("i_max_q_size"), false);
+        if(ph->getParam<bool>("i_enable_edge_detection")) {
+            edgesQ = device->getOutputQueue(edgesQName, ph->getParam<int>("i_max_q_size"), false);
+            edgesPub = image_transport::create_publisher(getROSNode(), "~/" + getName() + "/image_edges");
+        }
         if(ph->getParam<bool>("i_low_bandwidth")) {
-            colorQ->addCallback(std::bind(sensor_helpers::compressedImgCB,
-                                          std::placeholders::_1,
-                                          std::placeholders::_2,
-                                          *imageConverter,
-                                          rgbPub,
-                                          infoManager,
-                                          dai::RawImgFrame::Type::BGR888i));
+            colorQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+               sensor_helpers::compressedImgCB(name, data, *imageConverter, rgbPub, infoManager, dai::RawImgFrame::Type::BGR888i);
+            });
+            if(ph->getParam<bool>("i_enable_edge_detection")) {
+                edgesQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+                    sensor_helpers::compressedImgCB(name, data, *imageConverter, edgesPub, infoManager, dai::RawImgFrame::Type::GRAY8);
+                });
+            }
         } else {
-            colorQ->addCallback(std::bind(sensor_helpers::imgCB, std::placeholders::_1, std::placeholders::_2, *imageConverter, rgbPub, infoManager));
+            colorQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+                sensor_helpers::imgCB(name, data, *imageConverter, rgbPub, infoManager);
+            });
+            if(ph->getParam<bool>("i_enable_edge_detection")) {
+                edgesQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+                    sensor_helpers::imgCB(name, data, *imageConverter, edgesPub);
+                });
+            }
         }
     }
     if(ph->getParam<bool>("i_enable_preview")) {
@@ -114,7 +150,9 @@ void RGB::setupQueues(std::shared_ptr<dai::Device> device) {
         } else {
             infoManager->loadCameraInfo(ph->getParam<std::string>("i_calibration_file"));
         }
-        previewQ->addCallback(std::bind(sensor_helpers::imgCB, std::placeholders::_1, std::placeholders::_2, *imageConverter, previewPub, previewInfoManager));
+        previewQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+            sensor_helpers::imgCB(name, data, *imageConverter, previewPub, previewInfoManager);
+        });
     };
     controlQ = device->getInputQueue(controlQName);
 }
@@ -125,6 +163,9 @@ void RGB::closeQueues() {
         if(ph->getParam<bool>("i_enable_preview")) {
             previewQ->close();
         }
+    }
+    if(ph->getParam<bool>("i_enable_edge_detection")) {
+        edgesQ->close();
     }
     controlQ->close();
 }

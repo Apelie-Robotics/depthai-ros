@@ -105,15 +105,13 @@ void Stereo::setupLeftRectQueue(std::shared_ptr<dai::Device> device) {
         encType = dai::RawImgFrame::Type::BGR888i;
     }
     if(ph->getParam<bool>("i_left_rect_low_bandwidth")) {
-        leftRectQ->addCallback(std::bind(sensor_helpers::compressedImgCB,
-                                         std::placeholders::_1,
-                                         std::placeholders::_2,
-                                         *leftRectConv,
-                                         leftRectPub,
-                                         leftRectIM,
-                                         encType));
+        leftRectQ->addCallback([this, encType](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+            sensor_helpers::compressedImgCB(name, data, *leftRectConv, leftRectPub, leftRectIM, encType);
+        });
     } else {
-        leftRectQ->addCallback(std::bind(sensor_helpers::imgCB, std::placeholders::_1, std::placeholders::_2, *leftRectConv, leftRectPub, leftRectIM));
+        leftRectQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+            sensor_helpers::imgCB(name, data, *leftRectConv, leftRectPub, leftRectIM);
+        });
     }
 }
 
@@ -136,15 +134,13 @@ void Stereo::setupRightRectQueue(std::shared_ptr<dai::Device> device) {
         encType = dai::RawImgFrame::Type::BGR888i;
     }
     if(ph->getParam<bool>("i_right_rect_low_bandwidth")) {
-        rightRectQ->addCallback(std::bind(sensor_helpers::compressedImgCB,
-                                         std::placeholders::_1,
-                                         std::placeholders::_2,
-                                         *rightRectConv,
-                                         rightRectPub,
-                                         rightRectIM,
-                                         encType));
+        rightRectQ->addCallback([this, encType](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+            sensor_helpers::compressedImgCB(name, data, *rightRectConv, rightRectPub, rightRectIM, encType);
+        });
     } else {
-        rightRectQ->addCallback(std::bind(sensor_helpers::imgCB, std::placeholders::_1, std::placeholders::_2, *rightRectConv, rightRectPub, rightRectIM));
+        rightRectQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+            sensor_helpers::imgCB(name, data, *rightRectConv, rightRectPub, rightRectIM);
+        });
     }
 }
 
@@ -173,23 +169,24 @@ void Stereo::setupStereoQueue(std::shared_ptr<dai::Device> device) {
 
     if(ph->getParam<bool>("i_low_bandwidth")) {
         if(ph->getParam<bool>("i_output_disparity")) {
-            stereoQ->addCallback(std::bind(sensor_helpers::compressedImgCB,
-                                           std::placeholders::_1,
-                                           std::placeholders::_2,
-                                           *stereoConv,
-                                           stereoPub,
-                                           stereoIM,
-                                           dai::RawImgFrame::Type::GRAY8));
+            stereoQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+                sensor_helpers::compressedImgCB(name, data, *stereoConv, stereoPub, stereoIM, dai::RawImgFrame::Type::GRAY8);
+            });
         } else {
             // converting disp->depth
-            stereoQ->addCallback(std::bind(
-                sensor_helpers::compressedImgCB, std::placeholders::_1, std::placeholders::_2, *stereoConv, stereoPub, stereoIM, dai::RawImgFrame::Type::RAW8));
+            stereoQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+                sensor_helpers::compressedImgCB(name, data, *stereoConv, stereoPub, stereoIM, dai::RawImgFrame::Type::RAW8);
+            });
         }
     } else {
         if(ph->getParam<bool>("i_output_disparity")) {
-            stereoQ->addCallback(std::bind(sensor_helpers::imgCB, std::placeholders::_1, std::placeholders::_2, *stereoConv, stereoPub, stereoIM));
+            stereoQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+                sensor_helpers::imgCB(name, data, *stereoConv, stereoPub, stereoIM);
+            });
         }
-        stereoQ->addCallback(std::bind(sensor_helpers::imgCB, std::placeholders::_1, std::placeholders::_2, *stereoConv, stereoPub, stereoIM));
+        stereoQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+            sensor_helpers::imgCB(name, data, *stereoConv, stereoPub, stereoIM);
+        });
     }
 }
 

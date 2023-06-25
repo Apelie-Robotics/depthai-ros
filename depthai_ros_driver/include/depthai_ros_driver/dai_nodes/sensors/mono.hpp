@@ -4,6 +4,7 @@
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "image_transport/camera_publisher.hpp"
 #include "image_transport/image_transport.hpp"
+#include "image_transport/publisher.hpp"
 
 namespace dai {
 class Pipeline;
@@ -13,6 +14,7 @@ class DataInputQueue;
 class ADatatype;
 namespace node {
 class MonoCamera;
+class EdgeDetector;
 class XLinkIn;
 class XLinkOut;
 class VideoEncoder;
@@ -56,15 +58,20 @@ class Mono : public BaseNode {
    private:
     std::unique_ptr<dai::ros::ImageConverter> imageConverter;
     image_transport::CameraPublisher monoPub;
+    image_transport::Publisher edgesPub;
     std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager;
     std::shared_ptr<dai::node::MonoCamera> monoCamNode;
+    std::shared_ptr<dai::node::EdgeDetector> edgeDetectorNode;
     std::shared_ptr<dai::node::VideoEncoder> videoEnc;
+    std::shared_ptr<dai::node::VideoEncoder> edgesVideoEnc;
     std::unique_ptr<param_handlers::SensorParamHandler> ph;
     std::shared_ptr<dai::DataOutputQueue> monoQ;
+    std::shared_ptr<dai::DataOutputQueue> edgesQ;
     std::shared_ptr<dai::DataInputQueue> controlQ;
     std::shared_ptr<dai::node::XLinkOut> xoutMono;
+    std::shared_ptr<dai::node::XLinkOut> xoutEdges;
     std::shared_ptr<dai::node::XLinkIn> xinControl;
-    std::string monoQName, controlQName;
+    std::string monoQName, edgesQName, controlQName;
 };
 
 }  // namespace dai_nodes

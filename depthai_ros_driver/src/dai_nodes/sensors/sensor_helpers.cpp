@@ -94,6 +94,22 @@ std::vector<ImageSensor> availableSensors{
 void compressedImgCB(const std::string& /*name*/,
                      const std::shared_ptr<dai::ADatatype>& data,
                      dai::ros::ImageConverter& converter,
+                     image_transport::Publisher& pub,
+                     std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager,
+                     dai::RawImgFrame::Type dataType) {
+    auto img = std::dynamic_pointer_cast<dai::ImgFrame>(data);
+    std::deque<sensor_msgs::msg::Image> deq;
+    const auto info = infoManager->getCameraInfo();
+    converter.toRosMsgFromBitStream(img, deq, dataType, info);
+    while(deq.size() > 0) {
+        auto currMsg = deq.front();
+        pub.publish(currMsg);
+        deq.pop_front();
+    }
+}
+void compressedImgCB(const std::string& /*name*/,
+                     const std::shared_ptr<dai::ADatatype>& data,
+                     dai::ros::ImageConverter& converter,
                      image_transport::CameraPublisher& pub,
                      std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager,
                      dai::RawImgFrame::Type dataType) {
@@ -105,6 +121,19 @@ void compressedImgCB(const std::string& /*name*/,
         auto currMsg = deq.front();
         info.header = currMsg.header;
         pub.publish(currMsg, info);
+        deq.pop_front();
+    }
+}
+void imgCB(const std::string& /*name*/,
+           const std::shared_ptr<dai::ADatatype>& data,
+           dai::ros::ImageConverter& converter,
+           image_transport::Publisher& pub) {
+    auto img = std::dynamic_pointer_cast<dai::ImgFrame>(data);
+    std::deque<sensor_msgs::msg::Image> deq;
+    converter.toRosMsg(img, deq);
+    while(deq.size() > 0) {
+        auto currMsg = deq.front();
+        pub.publish(currMsg);
         deq.pop_front();
     }
 }

@@ -71,7 +71,9 @@ void Segmentation::setupQueues(std::shared_ptr<dai::Device> device) {
                                                                 imageManip->initialConfig.getResizeWidth()));
 
         ptPub = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/passthrough/image_raw");
-        ptQ->addCallback(std::bind(sensor_helpers::imgCB, std::placeholders::_1, std::placeholders::_2, *imageConverter, ptPub, infoManager));
+        ptQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
+            sensor_helpers::imgCB(name, data, *imageConverter, ptPub, infoManager);
+        });
     }
 }
 

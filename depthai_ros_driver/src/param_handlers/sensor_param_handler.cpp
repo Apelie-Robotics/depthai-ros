@@ -3,6 +3,7 @@
 #include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai-shared/properties/ColorCameraProperties.hpp"
 #include "depthai/pipeline/node/ColorCamera.hpp"
+#include "depthai/pipeline/node/EdgeDetector.hpp"
 #include "depthai/pipeline/node/MonoCamera.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/utils.hpp"
@@ -26,11 +27,60 @@ void SensorParamHandler::declareCommonParams() {
     declareAndLogParam<bool>("i_disable_node", false);
     declareAndLogParam<bool>("i_get_base_device_timestamp", false);
     declareAndLogParam<int>("i_board_socket_id", 0);
+    declareAndLogParam<bool>("i_enable_edge_detection", false);
     fSyncModeMap = {
         {"OFF", dai::CameraControl::FrameSyncMode::OFF},
         {"OUTPUT", dai::CameraControl::FrameSyncMode::OUTPUT},
         {"INPUT", dai::CameraControl::FrameSyncMode::INPUT},
     };
+}
+
+template<typename T, typename U>
+std::vector<T> flatten(const std::vector<std::vector<U>>& matrix) {
+    std::vector<T> vector;
+    for(const auto& row : matrix) {
+        vector.reserve(vector.size() + row.size());
+        for(const auto& coeff : row) {
+            vector.push_back(static_cast<T>(coeff));
+        }
+    }
+    return vector;
+}
+
+template<typename T, typename U>
+std::vector<std::vector<T>> reshape(const std::vector<U>& vector, size_t nrows, size_t ncols) {
+    std::vector<std::vector<T>> matrix(nrows, std::vector<T>(ncols));
+    assert(vector.size() == nrows * ncols);
+    for(size_t i = 0; i < nrows; ++i) {
+        for(size_t j = 0; j < ncols; ++j) {
+            matrix[i][j] = static_cast<T>(vector[j + i * ncols]);
+        }
+    }
+    return matrix;
+}
+
+void SensorParamHandler::declareParams(std::shared_ptr<dai::node::EdgeDetector> edgeDetector) {
+    dai::EdgeDetectorConfigData configData = edgeDetector->initialConfig.getConfigData();
+    const auto horizontalKernelCoeffs = declareAndLogParam<std::vector<int64_t>>(
+        "i_edge_detection_horizontal_kernel", flatten<int64_t>(configData.sobelFilterHorizontalKernel));
+    const auto verticalKernelCoeffs = declareAndLogParam<std::vector<int64_t>>(
+        "i_edge_detection_vertical_kernel", flatten<int64_t>(configData.sobelFilterVerticalKernel));
+    if(!horizontalKernelCoeffs.empty()) {
+        if(horizontalKernelCoeffs.size() == 9u) {
+            configData.sobelFilterHorizontalKernel = reshape<int>(horizontalKernelCoeffs, 3u, 3u);
+        } else {
+            RCLCPP_ERROR(getROSNode()->get_logger(), "Horizontal kernel should be 3x3, ignoring");
+        }
+    }
+    if(!verticalKernelCoeffs.empty()) {
+        if(verticalKernelCoeffs.size() == 9u) {
+            configData.sobelFilterVerticalKernel = reshape<int>(verticalKernelCoeffs, 3u, 3u);
+        } else {
+            RCLCPP_ERROR(getROSNode()->get_logger(), "Vertical kernel should be 3x3, ignoring");
+        }
+    }
+    edgeDetector->initialConfig.setSobelFilterKernels(
+        configData.sobelFilterHorizontalKernel, configData.sobelFilterVerticalKernel);
 }
 
 void SensorParamHandler::declareParams(std::shared_ptr<dai::node::MonoCamera> monoCam,

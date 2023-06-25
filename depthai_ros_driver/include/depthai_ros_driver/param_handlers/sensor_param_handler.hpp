@@ -14,6 +14,7 @@ namespace dai {
 namespace node {
 class MonoCamera;
 class ColorCamera;
+class EdgeDetector;
 }  // namespace node
 }  // namespace dai
 
@@ -29,6 +30,7 @@ class SensorParamHandler : public BaseParamHandler {
     explicit SensorParamHandler(rclcpp::Node* node, const std::string& name);
     ~SensorParamHandler();
     void declareCommonParams();
+    void declareParams(std::shared_ptr<dai::node::EdgeDetector> edgeDetector);
     void declareParams(std::shared_ptr<dai::node::MonoCamera> monoCam,
                        dai::CameraBoardSocket socket,
                        dai_nodes::sensor_helpers::ImageSensor sensor,
