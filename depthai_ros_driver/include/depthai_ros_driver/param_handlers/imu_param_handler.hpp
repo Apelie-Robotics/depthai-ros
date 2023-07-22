@@ -9,6 +9,7 @@
 #include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
 
 namespace dai {
+enum class IMUSensor;
 namespace node {
 class IMU;
 }
@@ -30,6 +31,10 @@ class ImuParamHandler : public BaseParamHandler {
     ~ImuParamHandler();
     void declareParams(std::shared_ptr<dai::node::IMU> imu, const std::string& imuType);
     dai::CameraControl setRuntimeParams(const std::vector<rclcpp::Parameter>& params) override;
+    std::unordered_map<std::string, dai::IMUSensor> imuAccelerometerModeMap;
+    std::unordered_map<std::string, dai::IMUSensor> imuGyroscopeModeMap;
+    std::unordered_map<std::string, dai::IMUSensor> imuMagnetometerModeMap;
+    std::unordered_map<std::string, dai::IMUSensor> imuRotationModeMap;
     std::unordered_map<std::string, dai::ros::ImuSyncMethod> imuSyncMethodMap;
     std::unordered_map<std::string, imu::ImuMsgType> imuMessagetTypeMap;
     imu::ImuMsgType getMsgType();
