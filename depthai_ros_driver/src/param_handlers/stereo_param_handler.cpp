@@ -44,7 +44,7 @@ void StereoParamHandler::declareParams(std::shared_ptr<dai::node::StereoDepth> s
     declareAndLogParam<bool>("i_output_disparity", false);
     declareAndLogParam<bool>("i_get_base_device_timestamp", false);
     declareAndLogParam<bool>("i_publish_topic", true);
-    
+
     declareAndLogParam<bool>("i_publish_left_rect", false);
     declareAndLogParam<bool>("i_left_rect_low_bandwidth", false);
     declareAndLogParam<int>("i_left_rect_low_bandwidth_quality", 50);
@@ -76,8 +76,9 @@ void StereoParamHandler::declareParams(std::shared_ptr<dai::node::StereoDepth> s
         }
     }
     declareAndLogParam<int>("i_board_socket_id", static_cast<int>(socket));
+    stereo->setDepthAlign(dai::StereoDepthConfig::AlgorithmControl::DepthAlign::CENTER);
     stereo->setDepthAlign(socket);
-            
+
     if(declareAndLogParam<bool>("i_set_input_size", false)) {
         stereo->setInputResolution(declareAndLogParam<int>("i_input_width", 1280), declareAndLogParam<int>("i_input_height", 720));
     }
