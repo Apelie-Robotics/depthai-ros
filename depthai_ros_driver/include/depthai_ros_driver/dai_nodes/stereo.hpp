@@ -11,8 +11,10 @@
 namespace dai {
 class Pipeline;
 class Device;
+class DataInputQueue;
 class DataOutputQueue;
 class ADatatype;
+class StereoDepthConfig;
 namespace node {
 class StereoDepth;
 class XLinkOut;
@@ -76,10 +78,13 @@ class Stereo : public BaseNode {
     std::unique_ptr<SensorWrapper> left;
     std::unique_ptr<SensorWrapper> right;
     std::unique_ptr<param_handlers::StereoParamHandler> ph;
+    std::shared_ptr<dai::DataInputQueue> configQ;
     std::shared_ptr<dai::DataOutputQueue> stereoQ, leftRectQ, rightRectQ;
+    std::shared_ptr<dai::node::XLinkIn> xinConfig;
     std::shared_ptr<dai::node::XLinkOut> xoutStereo, xoutLeftRect, xoutRightRect;
-    std::string stereoQName, leftRectQName, rightRectQName;
+    std::string stereoQName, leftRectQName, rightRectQName, configQName;
     StereoSensorInfo leftSensInfo, rightSensInfo;
+    std::shared_ptr<dai::StereoDepthConfig> config;
 };
 
 }  // namespace dai_nodes

@@ -8,6 +8,7 @@
 #include "depthai/pipeline/node/StereoDepth.hpp"
 #include "depthai/pipeline/node/VideoEncoder.hpp"
 #include "depthai/pipeline/node/XLinkOut.hpp"
+#include "depthai/pipeline/node/XLinkIn.hpp"
 #include "depthai_bridge/ImageConverter.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/dai_nodes/sensors/sensor_wrapper.hpp"
@@ -33,6 +34,8 @@ Stereo::Stereo(const std::string& daiNodeName,
 
     ph = std::make_unique<param_handlers::StereoParamHandler>(node, daiNodeName);
     ph->declareParams(stereoCamNode, rightInfo.name);
+    config = std::make_shared<dai::StereoDepthConfig>();
+    config->set(stereoCamNode->initialConfig.get());
     setXinXout(pipeline);
     left->link(stereoCamNode->left);
     right->link(stereoCamNode->right);
@@ -43,9 +46,14 @@ void Stereo::setNames() {
     stereoQName = getName() + "_stereo";
     leftRectQName = getName() + "_left_rect";
     rightRectQName = getName() + "_right_rect";
+    configQName = getName() + "_config";
 }
 
 void Stereo::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
+    xinConfig = pipeline->create<dai::node::XLinkIn>();
+    xinConfig->setStreamName(configQName);
+    xinConfig->out.link(stereoCamNode->inputConfig);
+
     if(ph->getParam<bool>("i_publish_topic")) {
         xoutStereo = pipeline->create<dai::node::XLinkOut>();
         xoutStereo->setStreamName(stereoQName);
@@ -202,6 +210,7 @@ void Stereo::setupQueues(std::shared_ptr<dai::Device> device) {
     if(ph->getParam<bool>("i_publish_right_rect")) {
         setupRightRectQueue(device);
     }
+    configQ = device->getInputQueue(configQName);
 }
 void Stereo::closeQueues() {
     left->closeQueues();
@@ -215,6 +224,7 @@ void Stereo::closeQueues() {
     if(ph->getParam<bool>("i_publish_right_rect")) {
         rightRectQ->close();
     }
+    configQ->close();
 }
 
 void Stereo::link(dai::Node::Input in, int /*linkType*/) {
@@ -232,6 +242,13 @@ dai::Node::Input Stereo::getInput(int linkType) {
 }
 
 void Stereo::updateParams(const std::vector<rclcpp::Parameter>& params) {
+    for(const auto& p : params) {
+      if(p.get_name() == ph->getFullParamName("i_stereo_conf_threshold")) {
+        config->setConfidenceThreshold(p.get_value<int>());
+        configQ->send(config);
+        break;
+      }
+    }
     ph->setRuntimeParams(params);
 }
 
