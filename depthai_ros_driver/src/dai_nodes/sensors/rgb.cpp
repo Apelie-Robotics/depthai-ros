@@ -54,17 +54,6 @@ void RGB::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
             else
                 colorCamNode->video.link(xoutColor->input);
         }
-        if(ph->getParam<bool>("i_enable_edge_detection")) {
-            xoutEdges = pipeline->create<dai::node::XLinkOut>();
-            xoutEdges->setStreamName(edgesQName);
-            if(ph->getParam<bool>("i_low_bandwidth")) {
-                edgesVideoEnc = sensor_helpers::createEncoder(pipeline, ph->getParam<int>("i_low_bandwidth_quality"));
-                edgeDetectorNode->outputImage.link(edgesVideoEnc->input);
-                edgesVideoEnc->bitstream.link(xoutEdges->input);
-            } else {
-                edgeDetectorNode->outputImage.link(xoutEdges->input);
-            }
-        }
     }
     if(ph->getParam<bool>("i_enable_preview")) {
         xoutPreview = pipeline->create<dai::node::XLinkOut>();
