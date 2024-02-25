@@ -25,7 +25,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(rclcpp::No
     auto nType = utils::getValFromMap(nTypeUpCase, nnTypeMap);
 
     std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
-    auto rgb = std::make_unique<dai_nodes::SensorWrapper>("rgb", node, pipeline, device, dai::CameraBoardSocket::RGB);
+    auto rgb = std::make_unique<dai_nodes::SensorWrapper>("rgb", node, pipeline, device, dai::CameraBoardSocket::CAM_A);
     switch(nType) {
         case NNType::None:
             break;
@@ -35,7 +35,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGB::createPipeline(rclcpp::No
             break;
         }
         case NNType::Spatial: {
-            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGB.");
+            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGB. Please change camera.i_nn_type parameter to RGB.");
         }
         default:
             break;
@@ -51,7 +51,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBD::createPipeline(rclcpp::N
     auto nType = utils::getValFromMap(nTypeUpCase, nnTypeMap);
 
     std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
-    auto rgb = std::make_unique<dai_nodes::SensorWrapper>("rgb", node, pipeline, device, dai::CameraBoardSocket::RGB);
+    auto rgb = std::make_unique<dai_nodes::SensorWrapper>("rgb", node, pipeline, device, dai::CameraBoardSocket::CAM_A);
     auto stereo = std::make_unique<dai_nodes::Stereo>("stereo", node, pipeline, device);
     switch(nType) {
         case NNType::None:
@@ -81,9 +81,9 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(rclc
     auto nType = utils::getValFromMap(nTypeUpCase, nnTypeMap);
 
     std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
-    auto rgb = std::make_unique<dai_nodes::SensorWrapper>("rgb", node, pipeline, device, dai::CameraBoardSocket::RGB);
-    auto left = std::make_unique<dai_nodes::SensorWrapper>("left", node, pipeline, device, dai::CameraBoardSocket::LEFT);
-    auto right = std::make_unique<dai_nodes::SensorWrapper>("right", node, pipeline, device, dai::CameraBoardSocket::RIGHT);
+    auto rgb = std::make_unique<dai_nodes::SensorWrapper>("rgb", node, pipeline, device, dai::CameraBoardSocket::CAM_A);
+    auto left = std::make_unique<dai_nodes::SensorWrapper>("left", node, pipeline, device, dai::CameraBoardSocket::CAM_B);
+    auto right = std::make_unique<dai_nodes::SensorWrapper>("right", node, pipeline, device, dai::CameraBoardSocket::CAM_C);
     switch(nType) {
         case NNType::None:
             break;
@@ -93,7 +93,7 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> RGBStereo::createPipeline(rclc
             break;
         }
         case NNType::Spatial: {
-            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGBStereo.");
+            RCLCPP_WARN(node->get_logger(), "Spatial NN selected, but configuration is RGBStereo. Please change camera.i_nn_type parameter to RGB.");
         }
         default:
             break;
@@ -108,8 +108,8 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> Stereo::createPipeline(rclcpp:
                                                                          std::shared_ptr<dai::Pipeline> pipeline,
                                                                          const std::string& /*nnType*/) {
     std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
-    auto left = std::make_unique<dai_nodes::SensorWrapper>("left", node, pipeline, device, dai::CameraBoardSocket::LEFT);
-    auto right = std::make_unique<dai_nodes::SensorWrapper>("right", node, pipeline, device, dai::CameraBoardSocket::RIGHT);
+    auto left = std::make_unique<dai_nodes::SensorWrapper>("left", node, pipeline, device, dai::CameraBoardSocket::CAM_B);
+    auto right = std::make_unique<dai_nodes::SensorWrapper>("right", node, pipeline, device, dai::CameraBoardSocket::CAM_C);
     daiNodes.push_back(std::move(left));
     daiNodes.push_back(std::move(right));
     return daiNodes;
@@ -128,17 +128,11 @@ std::vector<std::unique_ptr<dai_nodes::BaseNode>> CamArray::createPipeline(rclcp
                                                                            std::shared_ptr<dai::Pipeline> pipeline,
                                                                            const std::string& /*nnType*/) {
     std::vector<std::unique_ptr<dai_nodes::BaseNode>> daiNodes;
-    int i = 0;
-    int j = 0;
-    for(auto& sensor : device->getCameraSensorNames()) {
-        // append letter for greater sensor number
-        if(i % alphabet.size() == 0) {
-            j++;
-        }
-        std::string nodeName(j, alphabet[i % alphabet.size()]);
-        auto daiNode = std::make_unique<dai_nodes::SensorWrapper>(nodeName, node, pipeline, device, sensor.first);
+
+    for(auto& feature : device->getConnectedCameraFeatures()) {
+        auto name = utils::getSocketName(feature.socket);
+        auto daiNode = std::make_unique<dai_nodes::SensorWrapper>(name, node, pipeline, device, feature.socket);
         daiNodes.push_back(std::move(daiNode));
-        i++;
     };
     return daiNodes;
 }

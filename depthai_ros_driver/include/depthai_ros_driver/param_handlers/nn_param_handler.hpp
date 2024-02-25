@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "depthai-shared/common/CameraBoardSocket.hpp"
 #include "depthai/pipeline/datatype/CameraControl.hpp"
 #include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
 #include "nlohmann/json.hpp"
@@ -33,7 +34,7 @@ enum class NNFamily { Segmentation, Mobilenet, Yolo };
 }
 class NNParamHandler : public BaseParamHandler {
    public:
-    explicit NNParamHandler(rclcpp::Node* node, const std::string& name);
+    explicit NNParamHandler(rclcpp::Node* node, const std::string& name, const dai::CameraBoardSocket& socket = dai::CameraBoardSocket::CAM_A);
     ~NNParamHandler();
     nn::NNFamily getNNFamily();
     template <typename T>
@@ -42,6 +43,7 @@ class NNParamHandler : public BaseParamHandler {
         declareAndLogParam<bool>("i_enable_passthrough", false);
         declareAndLogParam<bool>("i_enable_passthrough_depth", false);
         declareAndLogParam<bool>("i_get_base_device_timestamp", false);
+        declareAndLogParam<bool>("i_update_ros_base_time_on_ros_msg", false);
         auto nn_path = getParam<std::string>("i_nn_config_path");
         using json = nlohmann::json;
         std::ifstream f(nn_path);

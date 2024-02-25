@@ -33,15 +33,14 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
         {"RAW", dai::IMUSensor::MAGNETOMETER_RAW},
         {"CALIBRATED", dai::IMUSensor::MAGNETOMETER_CALIBRATED},
         {"UNCALIBRATED", dai::IMUSensor::MAGNETOMETER_UNCALIBRATED}};
-    imuRotationModeMap = {
-        {"DEFAULT", dai::IMUSensor::ROTATION_VECTOR},
-        {"GAME", dai::IMUSensor::GAME_ROTATION_VECTOR},
-        {"GEOMAGNETIC", dai::IMUSensor::GEOMAGNETIC_ROTATION_VECTOR},
-        {"ARVR_STABILIZED", dai::IMUSensor::ARVR_STABILIZED_ROTATION_VECTOR},
-        {"ARVR_STABILIZED_GAME", dai::IMUSensor::ARVR_STABILIZED_GAME_ROTATION_VECTOR}};
+    rotationVectorTypeMap = {{"ROTATION_VECTOR", dai::IMUSensor::ROTATION_VECTOR},
+                             {"GAME_ROTATION_VECTOR", dai::IMUSensor::GAME_ROTATION_VECTOR},
+                             {"GEOMAGNETIC_ROTATION_VECTOR", dai::IMUSensor::GEOMAGNETIC_ROTATION_VECTOR},
+                             {"ARVR_STABILIZED_ROTATION_VECTOR", dai::IMUSensor::ARVR_STABILIZED_ROTATION_VECTOR},
+                             {"ARVR_STABILIZED_GAME_ROTATION_VECTOR", dai::IMUSensor::ARVR_STABILIZED_GAME_ROTATION_VECTOR}};
 
     declareAndLogParam<bool>("i_get_base_device_timestamp", false);
-    declareAndLogParam<std::string>("i_message_type", "IMU");
+    auto messageType = declareAndLogParam<std::string>("i_message_type", "IMU");
     declareAndLogParam<std::string>("i_sync_method", "LINEAR_INTERPOLATE_ACCEL");
 
     if (declareAndLogParam<bool>("i_enable_acc", true)) {
@@ -82,18 +81,21 @@ void ImuParamHandler::declareParams(std::shared_ptr<dai::node::IMU> imu, const s
             declareAndLogParam<bool>("i_enable_mag", false, true);
         }
     }
-
+    declareAndLogParam<bool>("i_update_ros_base_time_on_ros_msg", false);
     const bool rotationAvailable = imuType == "BNO086";
     if (declareAndLogParam<bool>("i_enable_rotation", false)) {
         if (rotationAvailable) {
             const std::string rotationModeName =
-                utils::getUpperCaseStr(declareAndLogParam<std::string>("i_rot_mode", "default"));
+                utils::getUpperCaseStr(declareAndLogParam<std::string>("i_rotation_vector_type", "ROTATION_VECTOR"));
             const dai::IMUSensor rotationMode =
-                utils::getValFromMap(rotationModeName, imuRotationModeMap);
+                utils::getValFromMap(rotationModeName, rotationVectorTypeMap);
             const int rotationFreq = declareAndLogParam<int>("i_rot_freq", 400);
             declareAndLogParam<float>("i_rot_cov", -1.0);
 
             imu->enableIMUSensor(rotationMode, rotationFreq);
+            if(messageType == "IMU_WITH_MAG" || messageType == "IMU_WITH_MAG_SPLIT") {
+                imu->enableIMUSensor(dai::IMUSensor::MAGNETOMETER_CALIBRATED, declareAndLogParam<int>("i_mag_freq", 100));
+            }
         } else {
             RCLCPP_ERROR(getROSNode()->get_logger(), "Rotation enabled but not available with current sensor");
             declareAndLogParam<bool>("i_enable_rotation", false, true);

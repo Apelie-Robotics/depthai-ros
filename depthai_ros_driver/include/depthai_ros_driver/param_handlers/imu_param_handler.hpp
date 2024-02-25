@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "depthai-shared/properties/IMUProperties.hpp"
 #include "depthai/pipeline/datatype/CameraControl.hpp"
 #include "depthai_bridge/ImuConverter.hpp"
 #include "depthai_ros_driver/param_handlers/base_param_handler.hpp"
@@ -37,6 +38,7 @@ class ImuParamHandler : public BaseParamHandler {
     std::unordered_map<std::string, dai::IMUSensor> imuRotationModeMap;
     std::unordered_map<std::string, dai::ros::ImuSyncMethod> imuSyncMethodMap;
     std::unordered_map<std::string, imu::ImuMsgType> imuMessagetTypeMap;
+    std::unordered_map<std::string, dai::IMUSensor> rotationVectorTypeMap;
     imu::ImuMsgType getMsgType();
     dai::ros::ImuSyncMethod getSyncMethod();
 };

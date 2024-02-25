@@ -3,8 +3,8 @@
 #include "depthai_ros_driver/dai_nodes/base_node.hpp"
 #include "image_transport/camera_publisher.hpp"
 #include "image_transport/image_transport.hpp"
-#include "image_transport/publisher.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
+#include "sensor_msgs/msg/image.hpp"
 
 namespace dai {
 class Pipeline;
@@ -15,7 +15,6 @@ enum class CameraBoardSocket;
 class ADatatype;
 namespace node {
 class ColorCamera;
-class EdgeDetector;
 class XLinkIn;
 class XLinkOut;
 class VideoEncoder;
@@ -62,18 +61,17 @@ class RGB : public BaseNode {
 
    private:
     std::unique_ptr<dai::ros::ImageConverter> imageConverter;
-    image_transport::CameraPublisher rgbPub, previewPub;
-    image_transport::Publisher edgesPub;
+    image_transport::CameraPublisher rgbPubIT, previewPubIT;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr rgbPub, previewPub;
+    rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr rgbInfoPub, previewInfoPub;
     std::shared_ptr<camera_info_manager::CameraInfoManager> infoManager, previewInfoManager;
     std::shared_ptr<dai::node::ColorCamera> colorCamNode;
-    std::shared_ptr<dai::node::EdgeDetector> edgeDetectorNode;
-    std::shared_ptr<dai::node::VideoEncoder> videoEnc, edgesVideoEnc;
     std::unique_ptr<param_handlers::SensorParamHandler> ph;
-    std::shared_ptr<dai::DataOutputQueue> colorQ, previewQ, edgesQ;
+    std::shared_ptr<dai::DataOutputQueue> colorQ, previewQ;
     std::shared_ptr<dai::DataInputQueue> controlQ;
-    std::shared_ptr<dai::node::XLinkOut> xoutColor, xoutPreview, xoutEdges;
+    std::shared_ptr<dai::node::XLinkOut> xoutColor, xoutPreview;
     std::shared_ptr<dai::node::XLinkIn> xinControl;
-    std::string ispQName, previewQName, controlQName, edgesQName;
+    std::string ispQName, previewQName, controlQName;
 };
 
 }  // namespace dai_nodes

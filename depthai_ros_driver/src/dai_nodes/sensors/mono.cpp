@@ -4,16 +4,16 @@
 #include "depthai/device/DataQueue.hpp"
 #include "depthai/device/Device.hpp"
 #include "depthai/pipeline/Pipeline.hpp"
-#include "depthai/pipeline/node/EdgeDetector.hpp"
 #include "depthai/pipeline/node/MonoCamera.hpp"
 #include "depthai/pipeline/node/VideoEncoder.hpp"
 #include "depthai/pipeline/node/XLinkIn.hpp"
 #include "depthai/pipeline/node/XLinkOut.hpp"
 #include "depthai_bridge/ImageConverter.hpp"
+#include "depthai_ros_driver/dai_nodes/sensors/sensor_helpers.hpp"
 #include "depthai_ros_driver/param_handlers/sensor_param_handler.hpp"
+#include "depthai_ros_driver/utils.hpp"
 #include "image_transport/camera_publisher.hpp"
 #include "image_transport/image_transport.hpp"
-#include "image_transport/publisher.hpp"
 #include "rclcpp/node.hpp"
 
 namespace depthai_ros_driver {
@@ -28,29 +28,18 @@ Mono::Mono(const std::string& daiNodeName,
     RCLCPP_DEBUG(node->get_logger(), "Creating node %s", daiNodeName.c_str());
     setNames();
     monoCamNode = pipeline->create<dai::node::MonoCamera>();
-    ph = std::make_unique<param_handlers::SensorParamHandler>(node, daiNodeName);
-    ph->declareParams(monoCamNode, socket, sensor, publish);
-    if(ph->getParam<bool>("i_enable_edge_detection")) {
-        edgeDetectorNode = pipeline->create<dai::node::EdgeDetector>();
-        ph->declareParams(edgeDetectorNode);
-    }
+    ph = std::make_unique<param_handlers::SensorParamHandler>(node, daiNodeName, socket);
+    ph->declareParams(monoCamNode, sensor, publish);
     setXinXout(pipeline);
     RCLCPP_DEBUG(node->get_logger(), "Node %s created", daiNodeName.c_str());
 }
 Mono::~Mono() = default;
 void Mono::setNames() {
     monoQName = getName() + "_mono";
-    edgesQName = getName() + "_edges";
     controlQName = getName() + "_control";
 }
 
 void Mono::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
-    if(ph->getParam<bool>("i_enable_edge_detection")) {
-        monoCamNode->out.link(edgeDetectorNode->inputImage);
-        edgeDetectorNode->setMaxOutputFrameSize(
-            monoCamNode->getResolutionWidth() *
-            monoCamNode->getResolutionHeight());
-    }
     if(ph->getParam<bool>("i_publish_topic")) {
         xoutMono = pipeline->create<dai::node::XLinkOut>();
         xoutMono->setStreamName(monoQName);
@@ -61,17 +50,6 @@ void Mono::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
         } else {
             monoCamNode->out.link(xoutMono->input);
         }
-        if(ph->getParam<bool>("i_enable_edge_detection")) {
-            xoutEdges = pipeline->create<dai::node::XLinkOut>();
-            xoutEdges->setStreamName(edgesQName);
-            if(ph->getParam<bool>("i_low_bandwidth")) {
-                edgesVideoEnc = sensor_helpers::createEncoder(pipeline, ph->getParam<int>("i_low_bandwidth_quality"));
-                edgeDetectorNode->outputImage.link(edgesVideoEnc->input);
-                edgesVideoEnc->bitstream.link(xoutEdges->input);
-            } else {
-                edgeDetectorNode->outputImage.link(xoutEdges->input);
-            }
-        }
     }
     xinControl = pipeline->create<dai::node::XLinkIn>();
     xinControl->setStreamName(controlQName);
@@ -80,14 +58,19 @@ void Mono::setXinXout(std::shared_ptr<dai::Pipeline> pipeline) {
 
 void Mono::setupQueues(std::shared_ptr<dai::Device> device) {
     if(ph->getParam<bool>("i_publish_topic")) {
-        monoQ = device->getOutputQueue(monoQName, ph->getParam<int>("i_max_q_size"), false);
-        auto tfPrefix = getTFPrefix(getName());
+        auto tfPrefix = getTFPrefix(utils::getSocketName(static_cast<dai::CameraBoardSocket>(ph->getParam<int>("i_board_socket_id"))));
         imageConverter =
             std::make_unique<dai::ros::ImageConverter>(tfPrefix + "_camera_optical_frame", false, ph->getParam<bool>("i_get_base_device_timestamp"));
-        monoPub = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/image_raw");
-        if(ph->getParam<bool>("i_enable_edge_detection")) {
-            edgesQ = device->getOutputQueue(edgesQName, ph->getParam<int>("i_max_q_size"), false);
-            edgesPub = image_transport::create_publisher(getROSNode(), "~/" + getName() + "/image_edges");
+        imageConverter->setUpdateRosBaseTimeOnToRosMsg(ph->getParam<bool>("i_update_ros_base_time_on_ros_msg"));
+        if(ph->getParam<bool>("i_low_bandwidth")) {
+            imageConverter->convertFromBitstream(dai::RawImgFrame::Type::GRAY8);
+        }
+        if(ph->getParam<bool>("i_add_exposure_offset")) {
+            auto offset = static_cast<dai::CameraExposureOffset>(ph->getParam<int>("i_exposure_offset"));
+            imageConverter->addExposureOffset(offset);
+        }
+        if(ph->getParam<bool>("i_reverse_stereo_socket_order")) {
+            imageConverter->reverseStereoSocketOrder();
         }
         infoManager = std::make_shared<camera_info_manager::CameraInfoManager>(
             getROSNode()->create_sub_node(std::string(getROSNode()->get_name()) + "/" + getName()).get(), "/" + getName());
@@ -101,25 +84,29 @@ void Mono::setupQueues(std::shared_ptr<dai::Device> device) {
         } else {
             infoManager->loadCameraInfo(ph->getParam<std::string>("i_calibration_file"));
         }
-        if(ph->getParam<bool>("i_low_bandwidth")) {
-            monoQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
-                sensor_helpers::compressedImgCB(name, data, *imageConverter, monoPub, infoManager, dai::RawImgFrame::Type::GRAY8);
-            });
+        monoQ = device->getOutputQueue(monoQName, ph->getParam<int>("i_max_q_size"), false);
+        if(ipcEnabled()) {
+            RCLCPP_DEBUG(getROSNode()->get_logger(), "Enabling intra_process communication!");
+            monoPub = getROSNode()->create_publisher<sensor_msgs::msg::Image>("~/" + getName() + "/image_raw", 10);
+            infoPub = getROSNode()->create_publisher<sensor_msgs::msg::CameraInfo>("~/" + getName() + "/camera_info", 10);
+            monoQ->addCallback(std::bind(sensor_helpers::splitPub,
+                                         std::placeholders::_1,
+                                         std::placeholders::_2,
+                                         *imageConverter,
+                                         monoPub,
+                                         infoPub,
+                                         infoManager,
+                                         ph->getParam<bool>("i_enable_lazy_publisher")));
 
-            if(ph->getParam<bool>("i_enable_edge_detection")) {
-                edgesQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
-                    sensor_helpers::compressedImgCB(name, data, *imageConverter, edgesPub, infoManager, dai::RawImgFrame::Type::GRAY8);
-                });
-            }
         } else {
-            monoQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
-                sensor_helpers::imgCB(name, data, *imageConverter, monoPub, infoManager);
-            });
-            if(ph->getParam<bool>("i_enable_edge_detection")) {
-                edgesQ->addCallback([this](const std::string& name, const std::shared_ptr<dai::ADatatype>& data) {
-                    sensor_helpers::imgCB(name, data, *imageConverter, edgesPub);
-                });
-            }
+            monoPubIT = image_transport::create_camera_publisher(getROSNode(), "~/" + getName() + "/image_raw");
+            monoQ->addCallback(std::bind(sensor_helpers::cameraPub,
+                                         std::placeholders::_1,
+                                         std::placeholders::_2,
+                                         *imageConverter,
+                                         monoPubIT,
+                                         infoManager,
+                                         ph->getParam<bool>("i_enable_lazy_publisher")));
         }
     }
     controlQ = device->getInputQueue(controlQName);
@@ -127,9 +114,6 @@ void Mono::setupQueues(std::shared_ptr<dai::Device> device) {
 void Mono::closeQueues() {
     if(ph->getParam<bool>("i_publish_topic")) {
         monoQ->close();
-    }
-    if(ph->getParam<bool>("i_enable_edge_detection")) {
-        edgesQ->close();
     }
     controlQ->close();
 }
