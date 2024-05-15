@@ -7,6 +7,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake_auto REQUIRED)
+find_package(vision_msgs REQUIRED)
 ament_auto_find_build_dependencies()
 # uncomment the following section in order to fill in
 # further dependencies manually.
